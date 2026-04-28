@@ -71,7 +71,7 @@ struct MenuContentView: View {
                         section(title: "Tiger requests", systemImage: "tray.full") {
                             tigerRequestsContent
                         }
-                        section(title: "Local sync (Tiger journal)", systemImage: "arrow.triangle.2.circlepath") {
+                        section(title: "Tiger heartbeat (VPS)", systemImage: "waveform.path.ecg") {
                             tigerHeartbeatContent
                         }
                     }
@@ -420,7 +420,8 @@ struct MenuContentView: View {
         } else {
             let hb = tiger.heartbeat
             RowButton {
-                let path = ("~/.openclaw/workspace/memory" as NSString).expandingTildeInPath
+                // Click → open the vault's Tiger journal mirror (synced nightly from VPS)
+                let path = ("~/.claude/projects/-Users-carlfung/memory/agents/journal/tiger" as NSString).expandingTildeInPath
                 NSWorkspace.shared.open(URL(fileURLWithPath: path))
             } label: {
                 HStack {
@@ -448,9 +449,9 @@ struct MenuContentView: View {
 
     private func heartbeatLabel(_ hb: TigerHeartbeat) -> String {
         switch hb.status {
-        case .fresh:   return "Sync fresh"
-        case .warning: return "Sync stale (>1d)"
-        case .stale:   return "Sync broken? (>3d)"
+        case .fresh:   return "Tiger active"
+        case .warning: return "Tiger quiet (>1d)"
+        case .stale:   return "Tiger silent (>3d)"
         case .missing: return "No journal data"
         }
     }
