@@ -20,7 +20,7 @@ struct MenuContentView: View {
             header
             ScrollView {
                 HStack(alignment: .top, spacing: 0) {
-                    // LEFT — Today / Active
+                    // LEFT — Personal / Life
                     VStack(alignment: .leading, spacing: 0) {
                         section(title: "Today's calendar", systemImage: "calendar") {
                             calendarContent
@@ -28,33 +28,33 @@ struct MenuContentView: View {
                         section(title: "Oura readiness", systemImage: "heart.fill") {
                             ouraContent
                         }
-                        section(title: "KAN — In Progress", systemImage: "kanban") {
-                            jiraContent
+                        section(title: "Deadlines", systemImage: "clock.badge.exclamationmark") {
+                            deadlineContent
                         }
-                        section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
-                            prContent
-                        }
-                        section(title: "GitHub Actions failures", systemImage: "xmark.octagon") {
-                            workflowContent
+                        section(title: "Stale blog drafts", systemImage: "doc.text") {
+                            blogContent
                         }
                     }
                     .frame(width: 360)
 
                     Divider()
 
-                    // RIGHT — Status / Stale
+                    // RIGHT — Code / Dev
                     VStack(alignment: .leading, spacing: 0) {
+                        section(title: "KAN — In Progress", systemImage: "kanban") {
+                            jiraContent
+                        }
+                        section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
+                            prContent
+                        }
                         section(title: "Vercel deploys", systemImage: "triangle.fill") {
                             vercelContent
                         }
+                        section(title: "GitHub Actions failures", systemImage: "xmark.octagon") {
+                            workflowContent
+                        }
                         section(title: "Turso DB usage", systemImage: "cylinder.split.1x2") {
                             tursoContent
-                        }
-                        section(title: "Deadlines", systemImage: "clock.badge.exclamationmark") {
-                            deadlineContent
-                        }
-                        section(title: "Stale blog drafts", systemImage: "doc.text") {
-                            blogContent
                         }
                     }
                     .frame(width: 360)
