@@ -332,17 +332,10 @@ struct MenuContentView: View {
             emptyRow("No stale drafts")
         } else {
             ForEach(blog.drafts) { draft in
-                RowButton {
+                BlogDraftRow(draft: draft) {
                     NSWorkspace.shared.open(draft.id)
-                } label: {
-                    HStack {
-                        Text("\(draft.ageDays)d")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(draft.ageDays > 30 ? .red : .orange)
-                            .frame(width: 56, alignment: .leading)
-                        Text(draft.name)
-                            .lineLimit(1)
-                    }
+                } onArchive: {
+                    blog.archive(draft.id)
                 }
             }
         }

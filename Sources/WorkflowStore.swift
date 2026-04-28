@@ -73,9 +73,10 @@ final class WorkflowStore: ObservableObject {
     private func fetchRepo(repo: String) async throws -> [WorkflowRun] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/gh")
+        // Exclude dependabot — those failures are bot upgrade attempts, not code issues.
         process.arguments = [
             "api",
-            "repos/\(repo)/actions/runs?status=failure&per_page=3"
+            "repos/\(repo)/actions/runs?status=failure&per_page=5&exclude_pull_requests=true"
         ]
         let stdout = Pipe()
         process.standardOutput = stdout
@@ -92,11 +93,22 @@ final class WorkflowStore: ObservableObject {
                 let head_branch: String?
                 let html_url: String
                 let updated_at: String
+                let event: String?
+                let actor: Actor?
+                struct Actor: Decodable { let login: String }
             }
         }
         let decoded = try JSONDecoder().decode(Resp.self, from: data)
         let iso = ISO8601DateFormatter()
-        return decoded.workflow_runs.compactMap { run in
+        return decoded.workflow_runs
+            // Skip dependabot/bot-triggered runs — high noise, low signal.
+            .filter { run in
+                let actor = run.actor?.login.lowercased() ?? ""
+                if actor.contains("dependabot") || actor.contains("[bot]") { return false }
+                if run.event == "dynamic" { return false }   // dependabot's event name
+                return true
+            }
+            .compactMap { run in
             guard let url = URL(string: run.html_url) else { return nil }
             return WorkflowRun(
                 id: "\(repo)#\(run.id)",
