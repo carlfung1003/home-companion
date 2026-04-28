@@ -43,7 +43,7 @@ struct MenuContentView: View {
 
                     // RIGHT — Code / Dev
                     VStack(alignment: .leading, spacing: 0) {
-                        section(title: "KAN — In Progress", systemImage: "kanban") {
+                        section(title: "KAN — Active", systemImage: "kanban") {
                             jiraContent
                         }
                         section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
@@ -214,7 +214,7 @@ struct MenuContentView: View {
         if let err = jira.error {
             errorRow(err)
         } else if jira.tickets.isEmpty && !jira.loading {
-            emptyRow("No tickets in progress")
+            emptyRow("No active tickets")
         } else {
             ForEach(jira.tickets) { ticket in
                 RowButton {
@@ -225,11 +225,35 @@ struct MenuContentView: View {
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.accentColor)
                             .frame(width: 56, alignment: .leading)
+                        Text(jiraStatusBadge(ticket.status))
+                            .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                            .foregroundColor(jiraStatusColor(ticket.status))
+                            .frame(width: 28, alignment: .leading)
                         Text(ticket.summary)
                             .lineLimit(1)
                     }
                 }
             }
+        }
+    }
+
+    private func jiraStatusBadge(_ status: String) -> String {
+        switch status.lowercased() {
+        case "in progress": return "wip"
+        case "in review":   return "rev"
+        case "to do":       return "to"
+        case "done":        return "ok"
+        default:            return "?"
+        }
+    }
+
+    private func jiraStatusColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "in progress": return .blue
+        case "in review":   return .orange
+        case "to do":       return .secondary
+        case "done":        return .green
+        default:            return .secondary
         }
     }
 
