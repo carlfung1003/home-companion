@@ -1,0 +1,44 @@
+name: HomeCompanion
+options:
+  bundleIdPrefix: com.carlfung
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      GCC_PREPROCESSOR_DEFINITIONS: "DEBUG=1 $(inherited)"
+      ONLY_ACTIVE_ARCH: YES
+      ENABLE_TESTABILITY: YES
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  HomeCompanion:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    settings:
+      base:
+        PRODUCT_NAME: "Home Companion"
+        PRODUCT_BUNDLE_IDENTIFIER: com.carlfung.homecompanion
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.10"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "Home Companion"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Carl Fung"
+        ENABLE_PREVIEWS: YES

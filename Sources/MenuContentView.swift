@@ -1,0 +1,268 @@
+import SwiftUI
+import AppKit
+
+struct MenuContentView: View {
+    @StateObject private var calendar = CalendarStore()
+    @StateObject private var jira = JiraStore()
+    @StateObject private var prs = PullRequestStore()
+    @StateObject private var blog = BlogDraftsStore()
+    @StateObject private var deadlines = DeadlineStore()
+
+    @State private var lastRefresh = Date()
+    private let refreshInterval: TimeInterval = 300  // 5 minutes
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+
+                section(title: "Today's calendar", systemImage: "calendar") {
+                    calendarContent
+                }
+                section(title: "KAN — In Progress", systemImage: "kanban") {
+                    jiraContent
+                }
+                section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
+                    prContent
+                }
+                section(title: "Stale blog drafts", systemImage: "doc.text") {
+                    blogContent
+                }
+                section(title: "Deadlines", systemImage: "clock.badge.exclamationmark") {
+                    deadlineContent
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .frame(width: 380, height: 540)
+        .task {
+            await refreshAll()
+            // Periodic auto-refresh while popover is open
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(refreshInterval * 1_000_000_000))
+                if Task.isCancelled { break }
+                await refreshAll()
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            Text("Home Companion")
+                .font(.headline)
+            Spacer()
+            Button {
+                Task { await refreshAll() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.plain)
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Section helper
+
+    @ViewBuilder
+    private func section<Content: View>(title: String, systemImage: String,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .foregroundColor(.secondary)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            content()
+        }
+    }
+
+    // MARK: - Calendar
+
+    @ViewBuilder
+    private var calendarContent: some View {
+        if let err = calendar.error {
+            errorRow(err)
+        } else if calendar.events.isEmpty && !calendar.loading {
+            emptyRow("No more events today")
+        } else {
+            ForEach(calendar.events) { event in
+                RowButton {
+                    NSWorkspace.shared.open(URL(string: "https://calendar.google.com/calendar/u/0/r/day")!)
+                } label: {
+                    HStack {
+                        Text(event.timeLabel)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 56, alignment: .leading)
+                        Text(event.title)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Jira
+
+    @ViewBuilder
+    private var jiraContent: some View {
+        if let err = jira.error {
+            errorRow(err)
+        } else if jira.tickets.isEmpty && !jira.loading {
+            emptyRow("No tickets in progress")
+        } else {
+            ForEach(jira.tickets) { ticket in
+                RowButton {
+                    if let url = ticket.browseURL { NSWorkspace.shared.open(url) }
+                } label: {
+                    HStack {
+                        Text(ticket.id)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 56, alignment: .leading)
+                        Text(ticket.summary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - PRs
+
+    @ViewBuilder
+    private var prContent: some View {
+        if let err = prs.error {
+            errorRow(err)
+        } else if prs.prs.isEmpty && !prs.loading {
+            emptyRow("Inbox zero")
+        } else {
+            ForEach(prs.prs) { pr in
+                RowButton {
+                    NSWorkspace.shared.open(pr.url)
+                } label: {
+                    HStack {
+                        Text("#\(pr.number)")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 56, alignment: .leading)
+                        VStack(alignment: .leading) {
+                            Text(pr.title).lineLimit(1)
+                            Text(pr.repo).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Blog drafts
+
+    @ViewBuilder
+    private var blogContent: some View {
+        if let err = blog.error {
+            errorRow(err)
+        } else if blog.drafts.isEmpty && !blog.loading {
+            emptyRow("No stale drafts")
+        } else {
+            ForEach(blog.drafts) { draft in
+                RowButton {
+                    NSWorkspace.shared.open(draft.id)
+                } label: {
+                    HStack {
+                        Text("\(draft.ageDays)d")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(draft.ageDays > 30 ? .red : .orange)
+                            .frame(width: 56, alignment: .leading)
+                        Text(draft.name)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Deadlines
+
+    @ViewBuilder
+    private var deadlineContent: some View {
+        if let err = deadlines.error {
+            errorRow(err)
+        } else if deadlines.deadlines.isEmpty && !deadlines.loading {
+            emptyRow("No deadlines configured")
+        } else {
+            ForEach(deadlines.deadlines.prefix(8)) { d in
+                RowButton {
+                    if let url = d.url { NSWorkspace.shared.open(url) }
+                } label: {
+                    HStack {
+                        Text(d.daysRemaining < 0 ? "past" : "\(d.daysRemaining)d")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(badgeColor(d.badgeColorHint))
+                            .frame(width: 56, alignment: .leading)
+                        Text(d.label)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func badgeColor(_ c: Deadline.BadgeColor) -> Color {
+        switch c {
+        case .red: return .red
+        case .orange: return .orange
+        case .blue: return .blue
+        case .gray: return .gray
+        }
+    }
+
+    // MARK: - Common rows
+
+    private func errorRow(_ msg: String) -> some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundColor(.red)
+            Text(msg)
+                .font(.caption)
+                .foregroundColor(.red)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+    }
+
+    private func emptyRow(_ msg: String) -> some View {
+        Text(msg)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+    }
+
+    // MARK: - Refresh
+
+    private func refreshAll() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await calendar.refresh() }
+            group.addTask { await jira.refresh() }
+            group.addTask { await prs.refresh() }
+            group.addTask { await blog.refresh() }
+            group.addTask { await deadlines.refresh() }
+        }
+        lastRefresh = Date()
+    }
+}

@@ -1,0 +1,16 @@
+# xcodegen regenerates this from project.yml
+HomeCompanion.xcodeproj/
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# macOS
+.DS_Store
