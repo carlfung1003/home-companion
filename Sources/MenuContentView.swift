@@ -7,37 +7,65 @@ struct MenuContentView: View {
     @StateObject private var prs = PullRequestStore()
     @StateObject private var blog = BlogDraftsStore()
     @StateObject private var deadlines = DeadlineStore()
+    @StateObject private var vercel = VercelStore()
+    @StateObject private var oura = OuraStore()
+    @StateObject private var workflows = WorkflowStore()
+    @StateObject private var turso = TursoStore()
 
     @State private var lastRefresh = Date()
     private let refreshInterval: TimeInterval = 300  // 5 minutes
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                HStack(alignment: .top, spacing: 0) {
+                    // LEFT — Today / Active
+                    VStack(alignment: .leading, spacing: 0) {
+                        section(title: "Today's calendar", systemImage: "calendar") {
+                            calendarContent
+                        }
+                        section(title: "Oura readiness", systemImage: "heart.fill") {
+                            ouraContent
+                        }
+                        section(title: "KAN — In Progress", systemImage: "kanban") {
+                            jiraContent
+                        }
+                        section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
+                            prContent
+                        }
+                        section(title: "GitHub Actions failures", systemImage: "xmark.octagon") {
+                            workflowContent
+                        }
+                    }
+                    .frame(width: 360)
 
-                section(title: "Today's calendar", systemImage: "calendar") {
-                    calendarContent
+                    Divider()
+
+                    // RIGHT — Status / Stale
+                    VStack(alignment: .leading, spacing: 0) {
+                        section(title: "Vercel deploys", systemImage: "triangle.fill") {
+                            vercelContent
+                        }
+                        section(title: "Turso DB usage", systemImage: "cylinder.split.1x2") {
+                            tursoContent
+                        }
+                        section(title: "Deadlines", systemImage: "clock.badge.exclamationmark") {
+                            deadlineContent
+                        }
+                        section(title: "Stale blog drafts", systemImage: "doc.text") {
+                            blogContent
+                        }
+                    }
+                    .frame(width: 360)
                 }
-                section(title: "KAN — In Progress", systemImage: "kanban") {
-                    jiraContent
-                }
-                section(title: "PRs awaiting review", systemImage: "arrow.triangle.pull") {
-                    prContent
-                }
-                section(title: "Stale blog drafts", systemImage: "doc.text") {
-                    blogContent
-                }
-                section(title: "Deadlines", systemImage: "clock.badge.exclamationmark") {
-                    deadlineContent
-                }
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
         }
-        .frame(width: 380, height: 540)
+        .frame(width: 740, height: 600)
+        .background(.regularMaterial)
         .task {
             await refreshAll()
-            // Periodic auto-refresh while popover is open
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(refreshInterval * 1_000_000_000))
                 if Task.isCancelled { break }
@@ -53,6 +81,9 @@ struct MenuContentView: View {
             Text("Home Companion")
                 .font(.headline)
             Spacer()
+            Text(lastRefreshLabel)
+                .font(.caption2)
+                .foregroundColor(.secondary)
             Button {
                 Task { await refreshAll() }
             } label: {
@@ -67,7 +98,14 @@ struct MenuContentView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
-        .padding(.bottom, 6)
+        .padding(.vertical, 8)
+        .background(Color.gray.opacity(0.08))
+    }
+
+    private var lastRefreshLabel: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return "↻ \(f.string(from: lastRefresh).lowercased())"
     }
 
     // MARK: - Section helper
@@ -112,6 +150,42 @@ struct MenuContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Oura
+
+    @ViewBuilder
+    private var ouraContent: some View {
+        if let err = oura.error {
+            errorRow(err)
+        } else if oura.readiness == nil && !oura.loading {
+            emptyRow("No data")
+        } else if let r = oura.readiness {
+            RowButton {
+                NSWorkspace.shared.open(URL(string: "https://cloud.ouraring.com")!)
+            } label: {
+                HStack {
+                    Text("\(r.score)")
+                        .font(.system(.caption, design: .monospaced).weight(.semibold))
+                        .foregroundColor(scoreColor(r.color))
+                        .frame(width: 56, alignment: .leading)
+                    Text(r.label)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(r.day)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private func scoreColor(_ c: OuraReadiness.ScoreColor) -> Color {
+        switch c {
+        case .green:  return .green
+        case .yellow: return .orange
+        case .red:    return .red
         }
     }
 
@@ -163,6 +237,85 @@ struct MenuContentView: View {
                             Text(pr.title).lineLimit(1)
                             Text(pr.repo).font(.caption2).foregroundColor(.secondary)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - GitHub Actions
+
+    @ViewBuilder
+    private var workflowContent: some View {
+        if let err = workflows.error {
+            errorRow(err)
+        } else if workflows.runs.isEmpty && !workflows.loading {
+            emptyRow("No recent failures")
+        } else {
+            ForEach(workflows.runs) { run in
+                RowButton {
+                    NSWorkspace.shared.open(run.url)
+                } label: {
+                    HStack {
+                        Text(run.repo)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.red)
+                            .frame(width: 80, alignment: .leading)
+                            .lineLimit(1)
+                        Text(run.workflow)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Vercel
+
+    @ViewBuilder
+    private var vercelContent: some View {
+        if let err = vercel.error {
+            errorRow(err)
+        } else if vercel.deployments.isEmpty && !vercel.loading {
+            emptyRow("All green")
+        } else {
+            ForEach(vercel.deployments) { d in
+                RowButton {
+                    if let url = d.url { NSWorkspace.shared.open(url) }
+                } label: {
+                    HStack {
+                        Text(d.state)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(d.isFailing ? .red : .orange)
+                            .frame(width: 60, alignment: .leading)
+                        Text(d.project)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Turso
+
+    @ViewBuilder
+    private var tursoContent: some View {
+        if let err = turso.error {
+            errorRow(err)
+        } else if turso.databases.isEmpty && !turso.loading {
+            emptyRow("No databases")
+        } else {
+            ForEach(turso.databases) { db in
+                RowButton {
+                    NSWorkspace.shared.open(URL(string: "https://app.turso.tech")!)
+                } label: {
+                    HStack {
+                        Text(db.storagePercent.map { String(format: "%.1f%%", $0) } ?? "—")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor((db.storagePercent ?? 0) > 80 ? .red : .secondary)
+                            .frame(width: 56, alignment: .leading)
+                        Text(db.name)
+                            .lineLimit(1)
                     }
                 }
             }
@@ -248,9 +401,10 @@ struct MenuContentView: View {
     private func emptyRow(_ msg: String) -> some View {
         Text(msg)
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundColor(.primary.opacity(0.5))
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Refresh
@@ -262,6 +416,10 @@ struct MenuContentView: View {
             group.addTask { await prs.refresh() }
             group.addTask { await blog.refresh() }
             group.addTask { await deadlines.refresh() }
+            group.addTask { await vercel.refresh() }
+            group.addTask { await oura.refresh() }
+            group.addTask { await workflows.refresh() }
+            group.addTask { await turso.refresh() }
         }
         lastRefresh = Date()
     }
