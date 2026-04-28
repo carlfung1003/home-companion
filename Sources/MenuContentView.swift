@@ -11,6 +11,8 @@ struct MenuContentView: View {
     @StateObject private var oura = OuraStore()
     @StateObject private var workflows = WorkflowStore()
     @StateObject private var turso = TursoStore()
+    @StateObject private var bookmarks = BookmarksStore()
+    @StateObject private var tiger = TigerStore()
 
     @State private var lastRefresh = Date()
     private let refreshInterval: TimeInterval = 300  // 5 minutes
@@ -35,7 +37,7 @@ struct MenuContentView: View {
                             blogContent
                         }
                     }
-                    .frame(width: 360)
+                    .frame(width: 310)
 
                     Divider()
 
@@ -56,13 +58,29 @@ struct MenuContentView: View {
                         section(title: "Turso DB usage", systemImage: "cylinder.split.1x2") {
                             tursoContent
                         }
+                        section(title: "API billing", systemImage: "dollarsign.circle") {
+                            bookmarksContent
+                        }
                     }
-                    .frame(width: 360)
+                    .frame(width: 310)
+
+                    Divider()
+
+                    // THIRD — Tiger
+                    VStack(alignment: .leading, spacing: 0) {
+                        section(title: "Tiger requests", systemImage: "tray.full") {
+                            tigerRequestsContent
+                        }
+                        section(title: "Local sync (Tiger journal)", systemImage: "arrow.triangle.2.circlepath") {
+                            tigerHeartbeatContent
+                        }
+                    }
+                    .frame(width: 310)
                 }
                 .padding(.vertical, 8)
             }
         }
-        .frame(width: 740, height: 600)
+        .frame(width: 960, height: 600)
         .background(.regularMaterial)
         .task {
             await refreshAll()
@@ -367,6 +385,111 @@ struct MenuContentView: View {
         }
     }
 
+    // MARK: - Tiger requests
+
+    @ViewBuilder
+    private var tigerRequestsContent: some View {
+        if let err = tiger.error {
+            errorRow(err)
+        } else if tiger.requests.isEmpty {
+            emptyRow("No pending requests")
+        } else {
+            ForEach(tiger.requests) { req in
+                RowButton {
+                    NSWorkspace.shared.open(req.id)
+                } label: {
+                    HStack {
+                        Text("\(req.ageDays)d")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(req.ageDays > 14 ? .red : .orange)
+                            .frame(width: 56, alignment: .leading)
+                        Text(req.name)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Tiger heartbeat (local sync)
+
+    @ViewBuilder
+    private var tigerHeartbeatContent: some View {
+        if let err = tiger.error {
+            errorRow(err)
+        } else {
+            let hb = tiger.heartbeat
+            RowButton {
+                let path = ("~/.openclaw/workspace/memory" as NSString).expandingTildeInPath
+                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            } label: {
+                HStack {
+                    Text(hoursLabel(hb))
+                        .font(.system(.caption, design: .monospaced).weight(.semibold))
+                        .foregroundColor(heartbeatColor(hb.status))
+                        .frame(width: 56, alignment: .leading)
+                    VStack(alignment: .leading) {
+                        Text(heartbeatLabel(hb))
+                            .lineLimit(1)
+                        if let name = hb.lastEntryName {
+                            Text(name).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func hoursLabel(_ hb: TigerHeartbeat) -> String {
+        guard let h = hb.hoursSince else { return "—" }
+        if h < 24 { return "\(h)h" }
+        return "\(h / 24)d"
+    }
+
+    private func heartbeatLabel(_ hb: TigerHeartbeat) -> String {
+        switch hb.status {
+        case .fresh:   return "Sync fresh"
+        case .warning: return "Sync stale (>1d)"
+        case .stale:   return "Sync broken? (>3d)"
+        case .missing: return "No journal data"
+        }
+    }
+
+    private func heartbeatColor(_ s: TigerHeartbeat.Status) -> Color {
+        switch s {
+        case .fresh:   return .green
+        case .warning: return .orange
+        case .stale:   return .red
+        case .missing: return .gray
+        }
+    }
+
+    // MARK: - Bookmarks
+
+    @ViewBuilder
+    private var bookmarksContent: some View {
+        if let err = bookmarks.error {
+            errorRow(err)
+        } else if bookmarks.bookmarks.isEmpty {
+            emptyRow("No bookmarks configured")
+        } else {
+            ForEach(bookmarks.bookmarks) { bm in
+                RowButton {
+                    NSWorkspace.shared.open(bm.url)
+                } label: {
+                    HStack {
+                        Text(bm.tag ?? "")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .frame(width: 56, alignment: .leading)
+                        Text(bm.label)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
     private func badgeColor(_ c: Deadline.BadgeColor) -> Color {
         switch c {
         case .red: return .red
@@ -413,6 +536,8 @@ struct MenuContentView: View {
             group.addTask { await oura.refresh() }
             group.addTask { await workflows.refresh() }
             group.addTask { await turso.refresh() }
+            group.addTask { await bookmarks.refresh() }
+            group.addTask { await tiger.refresh() }
         }
         lastRefresh = Date()
     }
