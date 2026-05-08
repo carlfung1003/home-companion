@@ -6,7 +6,7 @@ final class JiraStore: ObservableObject {
     @Published var error: String?
     @Published var loading = false
 
-    private let jql = "assignee = currentUser() AND status in (\"In Progress\", \"In Review\") ORDER BY status, updated DESC"
+    private let jql = "project = KAN AND (assignee = currentUser() OR assignee is EMPTY) AND status in (\"In Progress\", \"In Review\") ORDER BY status, updated DESC"
 
     func refresh() async {
         loading = true
